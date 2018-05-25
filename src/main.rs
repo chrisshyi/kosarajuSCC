@@ -5,7 +5,7 @@ use kosarajuSCC::make_reverse_graph;
 
 fn main() {
     println!("Hello, world!");
-    let file = File::open("../SCC.txt").unwrap();
+    let file = File::open("/home/chris/Workspace/rust/kosarajuSCC/SCC.txt").unwrap();
     make_reverse_graph(file);
     
 }

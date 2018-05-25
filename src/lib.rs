@@ -46,7 +46,7 @@ mod tests {
 
     #[test]
     fn test_reverse_graph_construction() {
-        let file = File::open("/home/chris/Workspace/rust/kosarajuSCC/tests/test1.txt").unwrap();
+        let file = File::open("/home/chris/Workspace/rust/kosarajuSCC/test_files/test1.txt").unwrap();
         let reverse_graph = make_reverse_graph(file);
         assert!(reverse_graph.get(&4).unwrap().contains(&2));
         assert!(reverse_graph.get(&2).unwrap().contains(&1));
