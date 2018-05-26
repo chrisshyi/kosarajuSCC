@@ -11,24 +11,29 @@ use std::io::{BufReader, BufRead};
 /// 
 /// example:
 /// 2 5 indicates there an edge from vertex 2 to vertex 5
-pub fn make_reverse_graph(file: File) -> HashMap<i32, HashSet<i32>> {   
-    let mut map: HashMap<i32, HashSet<i32>> = HashMap::new();
+pub fn make_reverse_graph(file: File) -> (HashMap<i32, HashSet<i32>>, i32) {   
+    let mut graph: HashMap<i32, HashSet<i32>> = HashMap::new();
     let reader = BufReader::new(file);
     let (mut tail_vertx, mut head_vertx) = (0, 0); // Compiler won't allow use of uninitialized variables
-    
+
+    let mut largest_vertex = 1;    
     for line in reader.lines() {
         let split_line: Vec<String> = line.unwrap().split_whitespace().map(|s| s.to_string()).collect();
         tail_vertx = split_line[0].parse::<i32>().unwrap();
         head_vertx = split_line[1].parse::<i32>().unwrap();
 
-        println!("{} has an edge to {}", tail_vertx, head_vertx);
-        
-        if !map.contains_key(&head_vertx) {
-            map.insert(head_vertx, HashSet::new());
+        if tail_vertx > largest_vertex {
+            largest_vertex = tail_vertx;
         }
-        map.get_mut(&head_vertx).unwrap().insert(tail_vertx);
+        if head_vertx > largest_vertex {
+            largest_vertex = head_vertx
+        }
+        // println!("{} has an edge to {}", tail_vertx, head_vertx);
+
+        let neighbors = graph.entry(head_vertx).or_insert(HashSet::new());
+        neighbors.insert(tail_vertx); 
     }
-    map 
+    (graph, largest_vertex) 
 } 
 
 /// Outer function for depth first search, keeps track of either
@@ -74,7 +79,7 @@ pub fn dfs_outer(graph: HashMap<i32, HashSet<i32>>, first_pass: bool, num_vertic
 ///     leader_or_ftime: if first pass, this is the current finishing time, else, this is the value of the leader
 ///     leader_or_ft_map: if first pass, maps vertices to their finishing times, else, maps each leader to the size of their SCCs
 ///     explored_nodes: set of explored nodes
-pub fn dfs_inner(graph: &HashMap<i32, HashSet<i32>>, start_vertex: i32, first_pass: bool, 
+fn dfs_inner(graph: &HashMap<i32, HashSet<i32>>, start_vertex: i32, first_pass: bool, 
 leader_or_ftime: &mut Box<i32>, leader_or_ft_map: &mut HashMap<i32, i32>, explored_nodes: &mut HashSet<i32>) {
     let mut stack: Vec<i32> = Vec::new();
 
@@ -99,6 +104,27 @@ leader_or_ftime: &mut Box<i32>, leader_or_ft_map: &mut HashMap<i32, i32>, explor
     }                        
 }
 
+/// Relabels the vertices of a graph using their finishing times computed by 
+/// the first pass DFS of Kosaraju's algorithm
+pub fn relabel_graph(file: File, finishing_times: HashMap<i32, i32>) -> HashMap<i32, HashSet<i32>> {
+    let mut graph: HashMap<i32, HashSet<i32>> = HashMap::new();
+    let reader = BufReader::new(file);
+    let (mut tail_vertx, mut head_vertx) = (0, 0); // Compiler won't allow use of uninitialized variables
+
+    for line in reader.lines() {
+        let split_line: Vec<String> = line.unwrap().split_whitespace().map(|s| s.to_string()).collect();
+        tail_vertx = split_line[0].parse::<i32>().unwrap();
+        head_vertx = split_line[1].parse::<i32>().unwrap();
+
+        let relabelled_tail = finishing_times.get(&tail_vertx).unwrap();
+        let relabelled_head = finishing_times.get(&head_vertx).unwrap();
+        
+        let neighbors = graph.entry(*relabelled_tail).or_insert(HashSet::new());
+        neighbors.insert(*relabelled_head);
+    } 
+    graph
+}
+
 
 
 
@@ -110,7 +136,7 @@ mod tests {
     #[test]
     fn test_reverse_graph_construction() {
         let file = File::open("/home/chris/Workspace/rust/kosarajuSCC/test_files/test1.txt").unwrap();
-        let reverse_graph = make_reverse_graph(file);
+        let (reverse_graph, largest_vertex) = make_reverse_graph(file);
         assert!(reverse_graph.get(&4).unwrap().contains(&2));
         assert!(reverse_graph.get(&2).unwrap().contains(&1));
         assert!(reverse_graph.get(&1).unwrap().contains(&3));
