@@ -7,14 +7,14 @@ use std::cell::RefCell;
 
 pub fn compute_scc(file_path: &str) -> RefCell<HashMap<i32, i32>> {
 
-    let mut file = File::open(file_path).unwrap();
+    let file = File::open(file_path).unwrap();
 
     let (reverse_graph, num_vertices) = make_reverse_graph(file);
 
     let finishing_times = dfs_outer(reverse_graph, true, num_vertices);
 
-    file = File::open(file_path).unwrap();
-    let relabelled_graph = relabel_graph(file, &*finishing_times.borrow());
+    let file = File::open(file_path).unwrap();
+    let relabelled_graph = relabel_graph(file, &(finishing_times.borrow()));
 
     let scc_map = dfs_outer(relabelled_graph, false, num_vertices);
     scc_map
@@ -66,8 +66,8 @@ fn make_reverse_graph(file: File) -> (HashMap<i32, HashSet<i32>>, i32) {
 ///     A mapping of vertices to their finishing times (first pass), or a mapping of leader variables 
 ///     to their SCC sizes
 fn dfs_outer(graph: HashMap<i32, HashSet<i32>>, first_pass: bool, num_vertices: i32) -> RefCell<HashMap<i32, i32>> {
-    let mut explored_nodes: RefCell<HashSet<i32>> = RefCell::new(HashSet::new());
-    let mut result_map: RefCell<HashMap<i32, i32>> = RefCell::new(HashMap::new());
+    let explored_nodes: RefCell<HashSet<i32>> = RefCell::new(HashSet::new());
+    let result_map: RefCell<HashMap<i32, i32>> = RefCell::new(HashMap::new());
 
     let finishing_time = RefCell::new(0);
     let leader_val = RefCell::new(0);
@@ -77,11 +77,12 @@ fn dfs_outer(graph: HashMap<i32, HashSet<i32>>, first_pass: bool, num_vertices: 
         } else {
             println!("Second pass, {} vertices left", vertex);
         }
-        if !explored_nodes.borrow_mut().contains(&vertex) {
+        if !explored_nodes.borrow().contains(&vertex) {
             if first_pass {
                 dfs_inner(&graph, vertex, first_pass, &finishing_time, &result_map, &explored_nodes);
             } else {
-                *leader_val.borrow_mut() = vertex;
+                *(leader_val.borrow_mut()) = vertex;
+                println!("leader : {}", *(leader_val.borrow()));
                 dfs_inner(&graph, vertex, first_pass, &leader_val, &result_map, &explored_nodes);
             }
         }  
@@ -115,9 +116,7 @@ leader_or_ftime: &RefCell<i32>, leader_or_ft_map: &RefCell<HashMap<i32, i32>>, e
                 dfs_inner(graph, *neighbor, first_pass, leader_or_ftime, leader_or_ft_map, explored_nodes);
             }
         }
-    } else {
-        return;
-    }
+    } 
 
     if first_pass {
         *leader_or_ftime.borrow_mut() += 1;
@@ -162,7 +161,7 @@ mod tests {
     #[test]
     fn test_reverse_graph_construction() {
         let file = File::open("/home/chris/Workspace/rust/kosarajuSCC/test_files/test1.txt").unwrap();
-        let (reverse_graph, largest_vertex) = make_reverse_graph(file);
+        let (reverse_graph, _largest_vertex) = make_reverse_graph(file);
         assert!(reverse_graph.get(&4).unwrap().contains(&2));
         assert!(reverse_graph.get(&2).unwrap().contains(&1));
         assert!(reverse_graph.get(&1).unwrap().contains(&3));
@@ -170,13 +169,53 @@ mod tests {
     }
 
     #[test]
+    fn test_finishing_time_mapping() {
+        let file = File::open("/home/chris/Workspace/rust/kosarajuSCC/test_files/test2.txt").unwrap();
+        let (reverse_graph, largest_vertex) = make_reverse_graph(file);
+        let finishing_times = dfs_outer(reverse_graph, true, largest_vertex);
+        // There's actually two sets of finishing times that are correct
+        
+        let ft_map = finishing_times.borrow();
+        assert_eq!(*ft_map.get(&1).unwrap(), 2); // or 3
+        assert_eq!(*ft_map.get(&2).unwrap(), 3); // or 4
+        assert_eq!(*ft_map.get(&3).unwrap(), 1); // or 2
+        assert_eq!(*ft_map.get(&4).unwrap(), 5);
+        assert_eq!(*ft_map.get(&5).unwrap(), 6);
+        assert_eq!(*ft_map.get(&6).unwrap(), 4); // or 1
+        assert_eq!(*ft_map.get(&7).unwrap(), 7);
+
+    }
+
+    #[test]
+    fn test_graph_relabelling() {
+
+        let file = File::open("/home/chris/Workspace/rust/kosarajuSCC/test_files/test4.txt").unwrap();
+        let (reverse_graph, largest_vertex) = make_reverse_graph(file);
+        let finishing_times = dfs_outer(reverse_graph, true, largest_vertex);
+        let file = File::open("/home/chris/Workspace/rust/kosarajuSCC/test_files/test4.txt").unwrap();
+        let relabelled_graph = relabel_graph(file, &(finishing_times.borrow()));
+
+        assert_eq!(relabelled_graph.get(&2).unwrap().len(), 2);
+        assert_eq!(relabelled_graph.get(&3).unwrap().len(), 1);
+        assert_eq!(relabelled_graph.get(&4).unwrap().len(), 1);
+        assert_eq!(relabelled_graph.get(&5).unwrap().len(), 2);
+        assert_eq!(relabelled_graph.get(&6).unwrap().len(), 1);
+        assert_eq!(relabelled_graph.get(&1).unwrap().len(), 1);
+        assert!(!relabelled_graph.contains_key(&7));
+    }
+
+    #[test]
     fn test_input_file2() {
         let scc_map = compute_scc("/home/chris/Workspace/rust/kosarajuSCC/test_files/test2.txt");
         assert!(!scc_map.borrow().is_empty());
 
+        for key in scc_map.borrow().keys() {
+            println!("SCC: {}, size: {}", key, scc_map.borrow().get(key).unwrap());
+        }
+
         assert_eq!(*(scc_map.borrow().get(&6).unwrap()), 3);
         assert_eq!(*(scc_map.borrow().get(&7).unwrap()), 1);
-        assert_eq!(*(scc_map.borrow().get(&4).unwrap()), 3);
+        assert_eq!(*(scc_map.borrow().get(&3).unwrap()), 3);
     }
 
 
@@ -188,5 +227,21 @@ mod tests {
         assert_eq!(*(scc_map.borrow().get(&6).unwrap()), 4);
         assert_eq!(*(scc_map.borrow().get(&2).unwrap()), 1);
         assert_eq!(*(scc_map.borrow().get(&1).unwrap()), 1);
+    }
+
+    #[test]
+    fn test_input_file4() {
+
+        let scc_map = compute_scc("/home/chris/Workspace/rust/kosarajuSCC/test_files/test4.txt");
+        assert!(!scc_map.borrow().is_empty());
+
+        assert_eq!(*(scc_map.borrow().get(&5).unwrap()), 4);
+        assert_eq!(*(scc_map.borrow().get(&6).unwrap()), 1);
+        assert_eq!(*(scc_map.borrow().get(&7).unwrap()), 1);
+        assert_eq!(*(scc_map.borrow().get(&1).unwrap()), 1);
+
+        for key in scc_map.borrow().keys() {
+            println!("SCC: {}, size: {}", key, scc_map.borrow().get(key).unwrap());
+        }
     }
 }
